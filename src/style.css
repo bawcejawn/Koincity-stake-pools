@@ -1,0 +1,115 @@
+:root {
+  color: #1c1915;
+  background: #f6f3ec;
+  font-family: "Segoe UI", Helvetica, Arial, sans-serif;
+  line-height: 1.45;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+}
+
+#app {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 24px 16px 64px;
+}
+
+h1, h2, h3, p { margin: 0; }
+
+h1 { font-size: 1.7rem; }
+
+h2 { font-size: 1.2rem; margin-bottom: 8px; }
+
+header p, .note, .meta { color: #4d463c; }
+
+.warning {
+  background: #fff4d6;
+  border: 1px solid #e2c36a;
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin: 16px 0;
+}
+
+.panel, .card, .lock {
+  background: #fff;
+  border: 1px solid #e4ddd0;
+  border-radius: 12px;
+  padding: 14px;
+  margin-top: 12px;
+}
+
+.row, .actions, .filters, .wallet-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.wallet-actions, .filters { margin-top: 10px; }
+
+button, select, input {
+  font: inherit;
+}
+
+button {
+  background: #1f4b3a;
+  color: #fff;
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+button.secondary { background: #ece6db; color: #1c1915; }
+
+button:disabled { opacity: 0.55; cursor: not-allowed; }
+
+input, select {
+  border: 1px solid #d9d0c2;
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #fff;
+}
+
+.secret {
+  width: min(100%, 420px);
+}
+
+.address { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.92rem; }
+
+.badges { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+
+.badge {
+  background: #efe7d6;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 0.82rem;
+}
+
+.badge.up { background: #d9f0e3; }
+.badge.mine { background: #d9e6f7; }
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.stats div {
+  background: #faf7f1;
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.stats span { display: block; color: #5c554b; font-size: 0.8rem; }
+
+.status { margin-top: 10px; min-height: 1.2em; }
+.status.error { color: #8d2a2a; }
+
+.card.has-position, .lock.has-position { border-color: #2f6f52; }
+
+.small { font-size: 0.85rem; word-break: break-all; }

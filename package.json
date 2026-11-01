@@ -1,0 +1,18 @@
+{
+  "name": "koincity-recovery",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "koilib": "10.0.0",
+    "kondor-js": "1.2.0"
+  },
+  "devDependencies": {
+    "vite": "6.4.1"
+  }
+}
