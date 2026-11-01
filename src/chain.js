@@ -336,6 +336,57 @@ export async function loadWalletLocks(provider, userAddress) {
     .sort((a, b) => a.id - b.id);
 }
 
+const LOCK_PAGE = 20;
+
+// Every launched lock. getTokenLocks walks lock ids 1..getTotalTokenLocks.
+// getMyTokenLocks does not: addTokenLock indexes a lock under its receiver
+// and under its token address, not under the owner who launched it.
+export async function loadAllLocks(provider, onStatus) {
+  const lock = makeContract(LOCK_CONTRACT, lockAbi, provider);
+  const totalResult = await attempt(() => lock.functions.getTotalTokenLocks({}));
+  const total = Number(totalResult.result?.value || 0);
+  const rows = [];
+  let start = 1;
+  while (start <= total) {
+    const limit = Math.min(LOCK_PAGE, total - start + 1);
+    if (onStatus) onStatus(`Reading token locks ${start}–${start + limit - 1} of ${total}…`);
+    let page;
+    try {
+      page = await attempt(() =>
+        lock.functions.getTokenLocks({ start, limit, direction: 0 })
+      );
+    } catch (error) {
+      const message = String(error?.message || error);
+      if (!message.includes("bandwidth")) throw error;
+      page = null;
+    }
+    const entries = page?.result?.value || [];
+    if (!page || entries.length !== limit) {
+      for (let id = start; id < start + limit; id += 1) {
+        try {
+          const single = await attempt(() =>
+            lock.functions.getTokenLocks({ start: id, limit: 1, direction: 0 })
+          );
+          rows.push(...(single.result?.value || []));
+        } catch (error) {
+          const message = String(error?.message || error);
+          if (message.includes("not initialized") || message.includes("token info")) continue;
+          throw error;
+        }
+      }
+    } else {
+      rows.push(...entries);
+    }
+    start += limit;
+  }
+  const byId = new Map();
+  for (const row of rows) {
+    const item = normalizeLock(row);
+    byId.set(item.id, item);
+  }
+  return { total, locks: [...byId.values()].sort((a, b) => a.id - b.id) };
+}
+
 export async function loadLocks(provider, userAddress) {
   const byToken = await locksFor(provider, UP_TOKEN);
   const byUser = userAddress ? await locksFor(provider, userAddress) : [];

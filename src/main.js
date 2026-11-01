@@ -7,9 +7,9 @@ import {
   claimRewards,
   formatTime,
   formatUnits,
+  loadAllLocks,
   loadPools,
   loadPositions,
-  loadWalletLocks,
   loadUpBalance,
   loadUpToken,
   makeProvider,
@@ -23,13 +23,16 @@ const session = new Map();
 const drafts = {};
 
 const state = {
-  status: "Loading Liquidity UP and the Koincity pools…",
+  status: "Loading Liquidity UP, staking pools, and token locks…",
   error: "",
   token: null,
   pools: [],
   poolTotal: 0,
   locks: [],
+  lockTotal: 0,
+  locksLoaded: false,
   filter: "all",
+  lockFilter: "all",
   selectedPoolId: "",
   selectedLockId: "",
   account: "",
@@ -141,8 +144,6 @@ function disconnect() {
   state.account = "";
   state.balance = "";
   state.positionsLoaded = false;
-  state.locks = [];
-  state.selectedLockId = "";
   for (const pool of state.pools) {
     pool.staked = "0";
     pool.claimable = "0";
@@ -161,7 +162,7 @@ async function refreshPositions() {
     const [positions, balance, locks] = await Promise.all([
       loadPositions(provider, state.account),
       loadUpBalance(provider, state.account),
-      loadWalletLocks(provider, state.account),
+      loadAllLocks(provider),
     ]);
     const byId = new Map(positions.map((pool) => [pool.id, pool]));
     for (const pool of state.pools) {
@@ -172,9 +173,11 @@ async function refreshPositions() {
       pool.totalClaimed = fresh.totalClaimed;
     }
     state.balance = balance;
-    state.locks = locks;
-    if (!locks.some((lock) => String(lock.id) === state.selectedLockId)) {
-      state.selectedLockId = locks[0] ? String(locks[0].id) : "";
+    state.locks = locks.locks;
+    state.lockTotal = locks.total;
+    state.locksLoaded = true;
+    if (!locks.locks.some((lock) => String(lock.id) === state.selectedLockId)) {
+      state.selectedLockId = locks.locks[0] ? String(locks.locks[0].id) : "";
     }
     state.positionsLoaded = true;
     setStatus("Positions updated.");
@@ -472,7 +475,18 @@ function renderPool(pool) {
 function lockOptionLabel(lock) {
   const symbol = lock.symbol || "token";
   const name = lock.description || lock.name || "Lock";
-  return `#${lock.id} ${symbol} — ${name} — ${lockStatus(lock)}`;
+  let mine = "";
+  if (state.account && lock.receiver === state.account) mine = " · you can release";
+  else if (state.account && lock.owner === state.account) mine = " · you launched";
+  return `#${lock.id} ${symbol} — ${name} — ${lockStatus(lock)}${mine}`;
+}
+
+function lockJumpMatch(lock, filter) {
+  if (filter === "mine") {
+    return Boolean(state.account) && (lock.receiver === state.account || lock.owner === state.account);
+  }
+  if (filter === "ready") return !lock.claimed && !lock.locked;
+  return true;
 }
 
 function renderLocks(root) {
@@ -482,54 +496,77 @@ function renderLocks(root) {
     el(
       "p",
       "note",
-      `Every lock getMyTokenLocks returns for the connected address on ${LOCK_CONTRACT}, for any token. Release calls unlockTokenLock and sends the full amount to the receiver after the end time.`
+      `Every lock id from getTokenLocks on ${LOCK_CONTRACT}. A launch is not listed by getMyTokenLocks for the owner: that call only indexes the receiver and the token address. Release calls unlockTokenLock and pays the full amount to the receiver after the end time. Only the receiver can send it.`
     )
   );
+  const locks = [...state.locks].sort((a, b) => a.id - b.id);
+  const filters = el("div", "filters");
+  const filter = document.createElement("select");
+  filter.setAttribute("aria-label", "Jump to a group of locks");
+  const mineCount = locks.filter((lock) => lockJumpMatch(lock, "mine")).length;
+  const readyCount = locks.filter((lock) => lockJumpMatch(lock, "ready")).length;
+  for (const [value, label] of [
+    ["all", `All locks (${state.locksLoaded ? locks.length : "…"})`],
+    ["mine", `Jump to this wallet (${state.account ? mineCount : "connect a wallet"})`],
+    ["ready", `Jump to ready to release (${state.locksLoaded ? readyCount : "…"})`],
+  ]) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = label;
+    if (value === state.lockFilter) option.selected = true;
+    filter.append(option);
+  }
+  filter.addEventListener("change", () => {
+    state.lockFilter = filter.value;
+    const match = locks.find((lock) => lockJumpMatch(lock, filter.value));
+    if (match) state.selectedLockId = String(match.id);
+    render();
+  });
+  filters.append(filter);
+
   const picker = document.createElement("select");
   picker.id = "lock-picker";
   picker.setAttribute("aria-label", "Token lock");
-  const locks = [...state.locks].sort((a, b) => a.id - b.id);
-  if (!state.account) {
+  if (!state.locksLoaded) {
     const option = document.createElement("option");
-    option.textContent = "Connect a wallet to list locks";
+    option.textContent = "Loading token locks…";
     picker.append(option);
     picker.disabled = true;
-    section.append(picker);
-    root.append(section);
-    return;
-  }
-  if (!locks.length) {
+  } else if (!locks.length) {
     const option = document.createElement("option");
-    option.textContent = "No locks for this address";
+    option.textContent = "No locks returned by getTokenLocks";
     picker.append(option);
     picker.disabled = true;
-    section.append(picker);
-    section.append(el("p", "note", "This address has no locks in getMyTokenLocks."));
-    root.append(section);
-    return;
-  }
-  if (!locks.some((lock) => String(lock.id) === state.selectedLockId)) {
-    state.selectedLockId = String(locks[0].id);
-  }
-  for (const lock of locks) {
-    const option = document.createElement("option");
-    option.value = String(lock.id);
-    option.textContent = lockOptionLabel(lock);
-    if (option.value === state.selectedLockId) option.selected = true;
-    picker.append(option);
+  } else {
+    if (!locks.some((lock) => String(lock.id) === state.selectedLockId)) {
+      state.selectedLockId = String(locks[0].id);
+    }
+    for (const lock of locks) {
+      const option = document.createElement("option");
+      option.value = String(lock.id);
+      option.textContent = lockOptionLabel(lock);
+      if (option.value === state.selectedLockId) option.selected = true;
+      picker.append(option);
+    }
   }
   picker.addEventListener("change", () => {
     state.selectedLockId = picker.value;
     render();
   });
-  section.append(picker);
+  filters.append(picker);
+  section.append(filters);
+  if (state.locksLoaded && !locks.length) {
+    section.append(el("p", "note", "getTokenLocks returned no locks."));
+    root.append(section);
+    return;
+  }
 
   const lock = locks.find((item) => String(item.id) === state.selectedLockId);
   if (!lock) {
     root.append(section);
     return;
   }
-  const mine = lock.receiver === state.account || lock.owner === state.account;
+  const mine = Boolean(state.account) && (lock.receiver === state.account || lock.owner === state.account);
   const box = el("article", `lock${mine ? " has-position" : ""}`);
   const decimals = lock.decimals || 8;
   box.append(el("h3", "", `#${lock.id} ${lock.description || lock.symbol || "Lock"}`));
@@ -537,7 +574,11 @@ function renderLocks(root) {
   badges.append(el("span", "badge", lockStatus(lock)));
   if (lock.token === UP_TOKEN) badges.append(el("span", "badge up", "Liquidity UP"));
   else if (lock.symbol) badges.append(el("span", "badge", lock.symbol));
-  if (mine) badges.append(el("span", "badge mine", "This wallet"));
+  if (state.account && lock.receiver === state.account) {
+    badges.append(el("span", "badge mine", "You are the receiver"));
+  } else if (state.account && lock.owner === state.account) {
+    badges.append(el("span", "badge mine", "You launched this lock"));
+  }
   box.append(badges);
   const stats = el("div", "stats");
   for (const [label, value] of [
@@ -561,8 +602,9 @@ function renderLocks(root) {
   );
   box.append(release);
   if (!canRelease) {
-    let why = "Only the receiver can release this lock.";
-    if (state.account !== lock.receiver) why = "Only the receiver can release this lock.";
+    let why = "Connect the receiver's wallet to release this lock.";
+    if (!state.account) why = "Connect the receiver's wallet to release this lock.";
+    else if (state.account !== lock.receiver) why = "Only the receiver can release this lock. The owner who launched it cannot, unless that address is also the receiver.";
     else if (lock.claimed) why = "This lock is already released.";
     else if (lock.locked) why = "This lock has not reached its end time.";
     box.append(el("p", "note", why));
@@ -629,7 +671,18 @@ async function boot() {
       state.selectedPoolId = String(pools.pools[0].id);
     }
     const upCount = pools.pools.filter((pool) => pool.usesUp).length;
-    setStatus(`Loaded ${pools.total} staking pools. ${upCount} use Liquidity UP. Connect a wallet to list its token locks.`);
+    render();
+    const locks = await loadAllLocks(provider, (text) => setStatus(text));
+    state.locks = locks.locks;
+    state.lockTotal = locks.total;
+    state.locksLoaded = true;
+    if (locks.locks.length && !state.selectedLockId) {
+      state.selectedLockId = String(locks.locks[0].id);
+    }
+    const ready = locks.locks.filter((lock) => !lock.claimed && !lock.locked).length;
+    setStatus(
+      `Loaded ${pools.total} staking pools (${upCount} use Liquidity UP) and ${locks.total} token locks. ${ready} are ready for the receiver to release.`
+    );
   } catch (error) {
     setStatus(error.message || "Could not read Koinos.", true);
   }

@@ -27,7 +27,7 @@ A seed is turned into a key with SHA-256 of the exact text, which is the Koinos 
 
 ## What the page shows
 
-The staking dropdown lists every pool id from `getStakes`. The lock dropdown lists every lock `getMyTokenLocks` returns for the connected address, including tokens other than Liquidity UP.
+The staking dropdown lists every pool id from `getStakes`. The lock dropdown lists every lock id from `getTokenLocks`, including locks that are not indexed to the connected wallet. Only the receiver can release one, after the end time.
 
 Token locks are ids inside `1FT1D2jLKeeEFcfG5Zo7WKfYNHH9MMeK5N`. Release calls `unlockTokenLock` for the full amount after the end time.
 
