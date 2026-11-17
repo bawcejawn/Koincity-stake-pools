@@ -361,10 +361,33 @@ function renderPools(root) {
   });
   filters.append(filter);
 
+  const pools = [...state.pools].sort((a, b) => a.id - b.id);
+
+  // A group filter ("up" or "mine") lists every matching pool as its own card.
+  // Previously the page only ever showed the first match, so one pool with a
+  // failing claim blocked access to all the other positions.
+  if (state.filter !== "all") {
+    section.append(filters);
+    const matches = visiblePools();
+    if (!matches.length) {
+      section.append(
+        el(
+          "p",
+          "note",
+          state.filter === "mine" && !state.positionsLoaded
+            ? "Connect a wallet to see your positions."
+            : "No pools match this group."
+        )
+      );
+    }
+    for (const pool of matches) section.append(renderPoolSafe(pool));
+    root.append(section);
+    return;
+  }
+
   const picker = document.createElement("select");
   picker.id = "pool-picker";
   picker.setAttribute("aria-label", "Staking pool");
-  const pools = [...state.pools].sort((a, b) => a.id - b.id);
   if (!pools.length) {
     const option = document.createElement("option");
     option.textContent = "No pools loaded";
@@ -387,9 +410,21 @@ function renderPools(root) {
   section.append(filters);
 
   const selected = pools.find((pool) => String(pool.id) === state.selectedPoolId);
-  if (selected) section.append(renderPool(selected));
+  if (selected) section.append(renderPoolSafe(selected));
   else section.append(el("p", "note", "No pool selected."));
   root.append(section);
+}
+
+// One pool that fails to render must not take down the rest of the list.
+function renderPoolSafe(pool) {
+  try {
+    return renderPool(pool);
+  } catch (error) {
+    const card = el("article", "card");
+    card.append(el("h3", "", `#${pool.id} ${pool.title || "Pool"}`));
+    card.append(el("p", "note", `This pool could not be displayed: ${error.message || error}`));
+    return card;
+  }
 }
 
 function renderPool(pool) {
